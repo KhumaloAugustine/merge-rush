@@ -21,7 +21,9 @@ data class GameState(
     val scoreGoal: Int = 0,
     val comboGoal: Int = 0,
     val bestCombo: Int = 0,
-    val targetReached: Boolean = false
+    val targetReached: Boolean = false,
+    val fusionEnergy: Int = 0,
+    val fusionValue: Int = 0
 )
 
 data class MoveResult(val state: GameState, val gained: Int, val moved: Boolean)
@@ -71,7 +73,9 @@ object GameEngine {
             milestone = if (reachedNow) state.target else null,
             won = campaignWin,
             bestCombo = bestCombo,
-            targetReached = if (state.levelNumber == 0) false else targetReached
+            targetReached = if (state.levelNumber == 0) false else targetReached,
+            fusionEnergy = if (rawGain > 0) (state.fusionEnergy + 1).coerceAtMost(3) else state.fusionEnergy,
+            fusionValue = 0
         )
         val withTile = addRandomTile(moved, random)
         val outOfMoves = withTile.moveLimit > 0 && withTile.moves >= withTile.moveLimit && !withTile.won
@@ -86,6 +90,29 @@ object GameEngine {
         return state.copy(board = board, gameOver = false, continued = true)
     }
 
+    fun activateFusionPulse(state: GameState): GameState {
+        if (state.fusionEnergy < 3 || state.gameOver || state.won) return state
+        val pair = state.board.withIndex().filter { it.value > 0 }
+            .groupBy { it.value }.filterValues { it.size >= 2 }.minByOrNull { it.key }?.value
+            ?: return state
+        val value = pair.first().value
+        val board = state.board.toMutableList()
+        board[pair[0].index] = value * 2
+        board[pair[1].index] = 0
+        val reachedNow = !state.targetReached && board.maxOrNull()!! >= state.target
+        val targetReached = state.targetReached || reachedNow
+        val gain = value * 2 + if (reachedNow) state.target * 2 else 0
+        val score = state.score + gain
+        val won = state.levelNumber > 0 && targetReached && score >= state.scoreGoal && state.bestCombo >= state.comboGoal
+        return state.copy(
+            board = board, score = score, lastGain = gain,
+            target = if (reachedNow && state.levelNumber == 0) state.target * 2 else state.target,
+            milestone = if (reachedNow) state.target else null,
+            targetReached = if (state.levelNumber == 0) false else targetReached,
+            won = won, fusionEnergy = 0, fusionValue = value * 2
+        )
+    }
+
     fun hasMoves(board: List<Int>): Boolean {
         if (board.any { it == 0 }) return true
         for (row in 0 until BOARD_SIZE) for (col in 0 until BOARD_SIZE) {
@@ -97,10 +124,32 @@ object GameEngine {
     }
 
     fun suggestMove(state: GameState): Direction? = Direction.entries
-        .map { direction -> direction to move(state.copy(gameOver = false, won = false), direction, Random(0)) }
-        .filter { it.second.moved }
-        .maxWithOrNull(compareBy<Pair<Direction, MoveResult>> { it.second.gained }.thenBy { it.second.state.board.count { tile -> tile == 0 } })
+        .mapIndexed { index, direction ->
+            val first = move(state.copy(gameOver = false, won = false), direction, Random(10_000 + index))
+            direction to if (!first.moved) Double.NEGATIVE_INFINITY else {
+                val followUp = Direction.entries.mapIndexed { nextIndex, nextDirection ->
+                    val second = move(first.state.copy(gameOver = false, won = false), nextDirection, Random(20_000 + index * 10 + nextIndex))
+                    if (second.moved) boardQuality(second.state, second.gained) else Double.NEGATIVE_INFINITY
+                }.maxOrNull() ?: 0.0
+                boardQuality(first.state, first.gained) + followUp * 0.42
+            }
+        }
+        .maxByOrNull { it.second }
+        ?.takeIf { it.second.isFinite() }
         ?.first
+
+    private fun boardQuality(state: GameState, gained: Int): Double {
+        if (state.won) return 1_000_000.0
+        if (state.gameOver) return -1_000_000.0
+        val empty = state.board.count { it == 0 }
+        val largest = state.board.maxOrNull() ?: 2
+        val corners = listOf(0, BOARD_SIZE - 1, state.board.lastIndex - BOARD_SIZE + 1, state.board.lastIndex)
+        val cornerBonus = if (corners.any { state.board[it] == largest }) 180 else 0
+        val targetProgress = (largest.toDouble() / state.target.coerceAtLeast(2)).coerceAtMost(1.0) * 600
+        val scoreProgress = if (state.scoreGoal > 0) (state.score.toDouble() / state.scoreGoal).coerceAtMost(1.0) * 400 else 0.0
+        val comboProgress = if (state.comboGoal > 0) (state.bestCombo.toDouble() / state.comboGoal).coerceAtMost(1.0) * 300 else state.combo * 35.0
+        return gained * 9.0 + empty * empty * 18.0 + cornerBonus + targetProgress + scoreProgress + comboProgress
+    }
 
     fun shuffle(state: GameState, random: Random = Random.Default): GameState {
         if (state.won) return state

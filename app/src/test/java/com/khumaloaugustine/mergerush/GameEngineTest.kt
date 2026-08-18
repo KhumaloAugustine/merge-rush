@@ -49,6 +49,16 @@ class GameEngineTest {
         val state = GameState(board = listOf(2, 2, 0, 0) + List(12) { 0 })
         assertTrue(GameEngine.suggestMove(state) in listOf(Direction.LEFT, Direction.RIGHT))
     }
+    @Test fun hintReturnsOnlyALegalMove() {
+        val state = GameState(board = listOf(2, 4, 8, 16, 4, 8, 16, 32, 8, 16, 32, 64, 16, 32, 64, 0))
+        val hint = GameEngine.suggestMove(state)
+        assertNotNull(hint)
+        assertTrue(GameEngine.move(state, hint!!, Random(10)).moved)
+    }
+    @Test fun hintReturnsNothingWhenBoardIsFinished() {
+        val board = List(16) { i -> if ((i / 4 + i % 4) % 2 == 0) 2 else 4 }
+        assertNull(GameEngine.suggestMove(GameState(board = board, gameOver = true)))
+    }
     @Test fun advancedLevelWaitsForComboObjective() {
         val state = GameState(board = listOf(8, 8, 0, 0) + List(12) { 0 }, target = 16, levelNumber = 11, moveLimit = 20, comboGoal = 3)
         val result = GameEngine.move(state, Direction.LEFT, Random(7))
@@ -62,6 +72,21 @@ class GameEngineTest {
     @Test fun shufflePreservesEveryTile() {
         val board = listOf(2, 4, 8, 16) + List(12) { 0 }
         assertEquals(board.sorted(), GameEngine.shuffle(GameState(board = board), Random(9)).board.sorted())
+    }
+    @Test fun threeSuccessfulMergesChargeFusion() {
+        var state = GameState(board = listOf(2, 2, 0, 0) + List(12) { 0 })
+        repeat(3) { index ->
+            val value = 2 shl index
+            state = GameEngine.move(state.copy(board = listOf(value, value, 0, 0) + state.board.drop(4)), Direction.LEFT, Random(30 + index)).state
+        }
+        assertEquals(3, state.fusionEnergy)
+    }
+    @Test fun fusionPulseCombinesMatchingTilesAndOpensSpace() {
+        val board = listOf(2, 4, 2, 8) + List(12) { 0 }
+        val result = GameEngine.activateFusionPulse(GameState(board = board, fusionEnergy = 3))
+        assertEquals(0, result.fusionEnergy)
+        assertEquals(4, result.fusionValue)
+        assertEquals(board.count { it == 0 } + 1, result.board.count { it == 0 })
     }
     @Test fun campaignHasThreeIncreasingChallengeChapters() {
         assertEquals(40, campaignLevels.size)
