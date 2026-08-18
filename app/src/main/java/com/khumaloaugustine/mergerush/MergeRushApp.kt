@@ -1,4 +1,4 @@
-package com.mergerush.game
+package com.khumaloaugustine.mergerush
 
 import androidx.compose.foundation.*
 import androidx.compose.animation.*
@@ -17,6 +17,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
@@ -255,6 +256,7 @@ private val Readable: Color @Composable get() = MaterialTheme.colorScheme.onSurf
 }
 
 @Composable private fun SettingsScreen(themeMode: String, setTheme: (String) -> Unit) {
+    val uriHandler = LocalUriHandler.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Text("SETTINGS", fontSize = 25.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(vertical = 14.dp))
         Text("APPEARANCE", color = Mint, fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
@@ -272,6 +274,12 @@ private val Readable: Color @Composable get() = MaterialTheme.colorScheme.onSurf
         Surface(color = Panel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
             Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Visibility, null, tint = Violet); Column(Modifier.padding(start = 14.dp)) { Text("High-contrast game tiles", fontWeight = FontWeight.SemiBold); Text("Numbers use bold type and distinct colours in both themes.", color = Readable.copy(.7f), fontSize = 13.sp) } }
         }
+        Spacer(Modifier.height(24.dp))
+        Text("ABOUT", color = Mint, fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
+        Surface(onClick = { uriHandler.openUri("https://khumaloaugustine.github.io/merge-rush/privacy-policy.html") }, color = Panel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+            Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.PrivacyTip, null, tint = Violet); Text("Privacy Policy", Modifier.weight(1f).padding(horizontal = 14.dp), fontWeight = FontWeight.SemiBold); Icon(Icons.Rounded.OpenInNew, "Open privacy policy") }
+        }
+        Text("Support: augustinekhumalo96@gmail.com", color = Readable.copy(.7f), fontSize = 13.sp, modifier = Modifier.padding(16.dp))
     }
 }
 

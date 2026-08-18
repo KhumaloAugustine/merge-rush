@@ -1,4 +1,4 @@
-package com.mergerush.game
+package com.khumaloaugustine.mergerush
 
 import org.junit.Assert.*
 import org.junit.Test

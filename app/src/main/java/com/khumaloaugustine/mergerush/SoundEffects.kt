@@ -1,4 +1,4 @@
-package com.mergerush.game
+package com.khumaloaugustine.mergerush
 
 import android.media.AudioAttributes
 import android.media.AudioFormat

@@ -1,4 +1,4 @@
-package com.mergerush.game
+package com.khumaloaugustine.mergerush
 
 import android.content.Context
 import androidx.datastore.preferences.core.*

@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.mergerush.game"
+    namespace = "com.khumaloaugustine.mergerush"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.mergerush.game"
+        applicationId = "com.khumaloaugustine.mergerush"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

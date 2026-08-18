@@ -1,4 +1,4 @@
-package com.mergerush.game
+package com.khumaloaugustine.mergerush
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
