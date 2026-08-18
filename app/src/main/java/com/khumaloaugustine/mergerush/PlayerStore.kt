@@ -10,6 +10,8 @@ private val Context.dataStore by preferencesDataStore("player_progress")
 
 data class PlayerData(val highScore: Int = 0, val coins: Int = 0, val games: Int = 0, val highestTile: Int = 0, val unlockedLevel: Int = 1, val onboardingSeen: Boolean = false, val themeMode: String = "system")
 
+data class SavedSession(val game: GameState, val undos: Int, val shuffles: Int)
+
 class PlayerStore(private val context: Context) {
     private object Keys {
         val highScore = intPreferencesKey("high_score")
@@ -19,6 +21,8 @@ class PlayerStore(private val context: Context) {
         val unlockedLevel = intPreferencesKey("unlocked_level")
         val onboardingSeen = booleanPreferencesKey("onboarding_seen")
         val themeMode = stringPreferencesKey("theme_mode")
+        val sessionBoard = stringPreferencesKey("session_board")
+        val sessionValues = stringPreferencesKey("session_values")
     }
     val data: Flow<PlayerData> = context.dataStore.data.map { p ->
         PlayerData(p[Keys.highScore] ?: 0, p[Keys.coins] ?: 0, p[Keys.games] ?: 0, p[Keys.highestTile] ?: 0, p[Keys.unlockedLevel] ?: 1, p[Keys.onboardingSeen] ?: false, p[Keys.themeMode] ?: "system")
@@ -35,4 +39,40 @@ class PlayerStore(private val context: Context) {
     }
     suspend fun completeOnboarding() = context.dataStore.edit { it[Keys.onboardingSeen] = true }
     suspend fun setTheme(mode: String) = context.dataStore.edit { it[Keys.themeMode] = mode }
+
+    val session: Flow<SavedSession?> = context.dataStore.data.map { p ->
+        val board = p[Keys.sessionBoard]?.split(',')?.mapNotNull(String::toIntOrNull)
+        val values = p[Keys.sessionValues]?.split(',')?.mapNotNull(String::toIntOrNull)
+        if (board?.size != BOARD_SIZE * BOARD_SIZE || values == null || values.size != 18) null else {
+            SavedSession(
+                GameState(
+                    board = board,
+                    score = values[0], nextTile = values[1], gameOver = values[2] == 1,
+                    continued = values[3] == 1, combo = values[4], lastGain = values[5],
+                    moves = values[6], target = values[7], milestone = values[8].takeIf { it >= 0 },
+                    levelNumber = values[9], moveLimit = values[10], won = values[11] == 1,
+                    scoreGoal = values[12], comboGoal = values[13], bestCombo = values[14],
+                    targetReached = values[15] == 1
+                ),
+                undos = values[16], shuffles = values[17]
+            )
+        }
+    }
+
+    suspend fun saveSession(game: GameState, undos: Int, shuffles: Int) = context.dataStore.edit { p ->
+        p[Keys.sessionBoard] = game.board.joinToString(",")
+        p[Keys.sessionValues] = listOf(
+            game.score, game.nextTile, game.gameOver.flag(), game.continued.flag(), game.combo,
+            game.lastGain, game.moves, game.target, game.milestone ?: -1, game.levelNumber,
+            game.moveLimit, game.won.flag(), game.scoreGoal, game.comboGoal, game.bestCombo,
+            game.targetReached.flag(), undos, shuffles
+        ).joinToString(",")
+    }
+
+    suspend fun clearSession() = context.dataStore.edit {
+        it.remove(Keys.sessionBoard)
+        it.remove(Keys.sessionValues)
+    }
+
+    private fun Boolean.flag() = if (this) 1 else 0
 }

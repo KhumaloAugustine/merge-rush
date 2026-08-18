@@ -32,13 +32,20 @@ private val Violet: Color @Composable get() = MaterialTheme.colorScheme.primary
 private val Mint: Color @Composable get() = MaterialTheme.colorScheme.secondary
 private val Readable: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 
+private val evolutionNames = listOf("Spark", "Seed", "Sprout", "Bloom", "Grove", "Village", "Town", "City", "Kingdom", "Empire", "Legend", "Mythic", "Cosmic", "Infinite")
+private fun evolutionName(value: Int): String {
+    if (value < 2) return "Empty"
+    val index = Integer.numberOfTrailingZeros(value).coerceIn(1, evolutionNames.size) - 1
+    return evolutionNames[index]
+}
+
 @Composable fun MergeRushApp(vm: GameViewModel = viewModel()) {
     val game by vm.game.collectAsStateWithLifecycle()
     val player by vm.player.collectAsStateWithLifecycle()
     val undos by vm.undos.collectAsStateWithLifecycle()
     val hint by vm.hint.collectAsStateWithLifecycle()
     val shuffles by vm.shuffles.collectAsStateWithLifecycle()
-    var screen by remember { mutableStateOf("home") }
+    var screen by rememberSaveable { mutableStateOf("home") }
     var onboardingDismissed by rememberSaveable { mutableStateOf(false) }
     val dark = when (player.themeMode) { "light" -> false; "dark" -> true; else -> isSystemInDarkTheme() }
     val scheme = if (dark) darkColorScheme(primary = Color(0xFFA78BFA), secondary = Color(0xFF5EE7B7), background = Color(0xFF101426), surface = Color(0xFF151A31), surfaceVariant = Color(0xFF202743), onBackground = Color(0xFFF7F5FF), onSurface = Color(0xFFF7F5FF))
@@ -53,7 +60,7 @@ private val Readable: Color @Composable get() = MaterialTheme.colorScheme.onSurf
                         "levels" -> LevelsScreen(player) { level -> vm.startLevel(level); screen = "game" }
                         "stats" -> StatsScreen(player)
                         "settings" -> SettingsScreen(player.themeMode, vm::setTheme)
-                        else -> HomeScreen(player, { vm.restart(); screen = "game" }, { screen = "levels" })
+                        else -> HomeScreen(player, game, { vm.restart(); screen = "game" }, { screen = "game" }, { screen = "levels" })
                     }
                 }
             }
@@ -73,21 +80,32 @@ private val Readable: Color @Composable get() = MaterialTheme.colorScheme.onSurf
     }
 }
 
-@Composable private fun HomeScreen(player: PlayerData, play: () -> Unit, levels: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+@Composable private fun HomeScreen(player: PlayerData, game: GameState, play: () -> Unit, resume: () -> Unit, levels: () -> Unit) {
+    val canResume = game.moves > 0 && !game.gameOver && !game.won
+    Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.weight(1f))
-        Box(Modifier.size(96.dp).background(Violet, RoundedCornerShape(28.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(72.dp).background(Violet, RoundedCornerShape(22.dp)), contentAlignment = Alignment.Center) {
             Text("2⁺", fontSize = 42.sp, fontWeight = FontWeight.Black)
         }
-        Spacer(Modifier.height(22.dp))
-        Text("MERGE RUSH", fontSize = 36.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+        Spacer(Modifier.height(10.dp))
+        Text("MERGE RUSH", fontSize = 30.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
         Text("Slide. Merge. Go bigger.", color = Readable.copy(.72f))
-        Spacer(Modifier.height(36.dp))
-        Button(play, Modifier.fillMaxWidth().height(58.dp), shape = RoundedCornerShape(18.dp)) {
-            Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text("ENDLESS PLAY", fontWeight = FontWeight.Bold)
+        Surface(color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+            Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                Text("2", color = Mint, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                Text("  +  ", color = Readable.copy(.6f))
+                Text("2", color = Mint, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                Icon(Icons.Rounded.ArrowForward, null, Modifier.padding(horizontal = 10.dp), tint = Violet)
+                Column { Text("4  •  ${evolutionName(4)}", fontWeight = FontWeight.Black); Text("Keep merging to evolve your world", color = Readable.copy(.68f), fontSize = 11.sp) }
+            }
         }
-        Button(levels, Modifier.fillMaxWidth().padding(top = 12.dp).height(58.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink), shape = RoundedCornerShape(18.dp)) {
-            Icon(Icons.Rounded.EmojiEvents, null); Spacer(Modifier.width(8.dp)); Text("CHALLENGE LEVELS", fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        Button(if (canResume) resume else play, Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(18.dp)) {
+            Icon(if (canResume) Icons.Rounded.Restore else Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text(if (canResume) "CONTINUE GAME" else "PLAY", fontWeight = FontWeight.Bold)
+        }
+        if (canResume) TextButton(play, Modifier.padding(top = 4.dp)) { Text("PLAY NEW GAME") }
+        Button(levels, Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink), shape = RoundedCornerShape(18.dp)) {
+            Icon(Icons.Rounded.EmojiEvents, null); Spacer(Modifier.width(8.dp)); Text("LEVELS", fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.weight(1f))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -115,22 +133,32 @@ private val Readable: Color @Composable get() = MaterialTheme.colorScheme.onSurf
             game.moves > 0 -> sounds.move()
         }
     }
-    Column(Modifier.fillMaxSize().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(back) { Icon(Icons.Rounded.ArrowBack, "Back") }
-            Text("MERGE RUSH", fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+            Text("Merge Rush", fontWeight = FontWeight.Black, fontSize = 18.sp, modifier = Modifier.weight(1f))
             IconButton({ soundOn = !soundOn }) { Icon(if (soundOn) Icons.Rounded.VolumeUp else Icons.Rounded.VolumeOff, if (soundOn) "Mute sounds" else "Turn sounds on") }
-            IconButton(showHint, enabled = !game.gameOver && !game.won) { Icon(Icons.Rounded.Lightbulb, "Suggest a move", tint = if (hint != null) Color(0xFFFFD166) else LocalContentColor.current) }
-            IconButton({ showHelp = true }) { Icon(Icons.Rounded.HelpOutline, "How to play") }
-            IconButton(onClick = undo, enabled = undos > 0 && game.moves > 0 && !game.gameOver) { Badge { Text(undos.toString()) }; Icon(Icons.Rounded.Undo, "Undo") }
-            IconButton(restart) { Icon(Icons.Rounded.Refresh, "Restart") }
+            TextButton({ showHelp = true }) { Icon(Icons.Rounded.HelpOutline, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Help") }
         }
-        Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilledTonalButton(showHint, Modifier.weight(1f).height(40.dp), enabled = !game.gameOver && !game.won, contentPadding = PaddingValues(horizontal = 6.dp)) { Icon(Icons.Rounded.Lightbulb, null, Modifier.size(17.dp), tint = if (hint != null) Color(0xFFFFD166) else LocalContentColor.current); Spacer(Modifier.width(4.dp)); Text("Hint", fontSize = 11.sp) }
+            FilledTonalButton(undo, Modifier.weight(1f).height(40.dp), enabled = undos > 0 && game.moves > 0 && !game.gameOver, contentPadding = PaddingValues(horizontal = 6.dp)) { Icon(Icons.Rounded.Undo, null, Modifier.size(17.dp)); Spacer(Modifier.width(4.dp)); Text("Undo ($undos)", fontSize = 11.sp) }
+            FilledTonalButton(restart, Modifier.weight(1f).height(40.dp), contentPadding = PaddingValues(horizontal = 6.dp)) { Icon(Icons.Rounded.Refresh, null, Modifier.size(17.dp)); Spacer(Modifier.width(4.dp)); Text("Restart", fontSize = 11.sp) }
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ScoreCard("SCORE", game.score, Modifier.weight(1f)); ScoreCard("BEST", maxOf(game.score, player.highScore), Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { Text(if (game.levelNumber > 0) "LEVEL ${game.levelNumber}  •  GOAL ${game.target}" else "GOAL  ${game.target}", color = Mint, fontSize = 12.sp, fontWeight = FontWeight.Bold); LinearProgressIndicator(progress = { ((game.board.maxOrNull() ?: 2).toFloat() / game.target).coerceIn(0f, 1f) }, Modifier.fillMaxWidth().padding(top = 5.dp)) }
             AnimatedVisibility(game.combo >= 2) { Text("  x${game.combo.coerceAtMost(5)} COMBO", color = Color(0xFFFFD166), fontWeight = FontWeight.Black) }
+        }
+        AnimatedVisibility(game.moves < 3) {
+            Surface(color = Violet.copy(.14f), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(if (game.moves == 0) Icons.Rounded.Swipe else Icons.Rounded.AutoAwesome, null, tint = Violet)
+                    Text(if (game.moves == 0) "Swipe the board. Bring two matching numbers together." else "Great! Equal numbers become the next evolution. Keep going toward ${game.target}.", Modifier.padding(start = 10.dp), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
         }
         if (game.moveLimit > 0) Text("${game.moveLimit - game.moves} moves remaining", Modifier.padding(top = 8.dp), color = if (game.moveLimit - game.moves <= 8) Color(0xFFD84315) else Readable.copy(.78f), fontWeight = FontWeight.Bold)
         if (game.scoreGoal > 0 || game.comboGoal > 0) Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
@@ -155,13 +183,16 @@ private val Readable: Color @Composable get() = MaterialTheme.colorScheme.onSurf
             repeat(BOARD_SIZE) { r -> Row(Modifier.weight(1f)) { repeat(BOARD_SIZE) { c -> Tile(game.board[r * BOARD_SIZE + c], Modifier.weight(1f).fillMaxHeight()) } } }
         }
         Spacer(Modifier.height(12.dp))
-        AnimatedContent(game.lastGain, label = "score gain") { gain -> Text(if (gain > 0) "+$gain" else "Chain merges to build a combo", color = if (gain > 0) Mint else Readable.copy(.62f), fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+        AnimatedContent(game.lastGain, label = "score gain") { gain ->
+            val largest = game.board.maxOrNull() ?: 2
+            Text(if (gain > 0) "+$gain  •  ${evolutionName(largest)} discovered" else "Next mission: merge equal tiles to reach ${game.target}", color = if (gain > 0) Mint else Readable.copy(.72f), fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
         Spacer(Modifier.height(8.dp)); Text("NEXT TILE", fontSize = 11.sp, color = Readable.copy(.68f)); Tile(game.nextTile, Modifier.size(54.dp))
     }
-    if (game.gameOver) AlertDialog(onDismissRequest = {}, icon = { OutcomeIcon(false) }, title = { Text(if (game.levelNumber > 0) "Challenge not completed" else "Run complete") }, text = {
+    if (game.gameOver) AlertDialog(onDismissRequest = {}, icon = { OutcomeIcon(false) }, title = { Text(if (game.levelNumber > 0) "Try this level again" else "Game complete") }, text = {
         Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("Score  ${game.score}", fontSize = 26.sp, fontWeight = FontWeight.Bold); Text(if (game.levelNumber > 0) "Almost there. Review the objectives, adjust your strategy, and try again." else "You earned ${maxOf(1, game.score / 100)} coins.", color = Readable.copy(.78f), textAlign = TextAlign.Center) }
     }, confirmButton = { Button(restart) { Text("PLAY AGAIN") } }, dismissButton = {
-        if (!game.continued && game.levelNumber == 0) OutlinedButton(continueGame) { Text("DEMO REWARD: CONTINUE") }
+        if (!game.continued && game.levelNumber == 0) OutlinedButton(continueGame) { Text("ONE MORE CHANCE") }
     })
     if (game.won) AlertDialog(onDismissRequest = {}, icon = { OutcomeIcon(true) }, title = { Text("Level ${game.levelNumber} complete!") }, text = {
         val level = campaignLevels.first { it.number == game.levelNumber }
@@ -185,7 +216,7 @@ private val Readable: Color @Composable get() = MaterialTheme.colorScheme.onSurf
 
 @Composable private fun LevelsScreen(player: PlayerData, play: (Level) -> Unit) {
     Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(horizontal = 24.dp, vertical = 18.dp)) { Text("CHALLENGES", fontSize = 24.sp, fontWeight = FontWeight.Black); Text("Choose a level. Progress saves automatically.", color = Readable.copy(.7f), fontSize = 14.sp) }
+        Column(Modifier.padding(horizontal = 24.dp, vertical = 18.dp)) { Text("LEVELS", fontSize = 24.sp, fontWeight = FontWeight.Black); Text("Choose a level. Your progress saves automatically.", color = Readable.copy(.7f), fontSize = 14.sp) }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             campaignLevels.forEach { level ->
                 if (level.number in listOf(1, 11, 21, 31)) Text(when (level.number) { 1 -> "FOUNDATIONS"; 11 -> "STRATEGIST"; 21 -> "EXPERT LEAGUE"; else -> "LEGEND LEAGUE" }, color = if (level.number >= 21) Color(0xFFD99A00) else Mint, fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
@@ -222,6 +253,7 @@ private val Readable: Color @Composable get() = MaterialTheme.colorScheme.onSurf
     var page by rememberSaveable { mutableIntStateOf(0) }
     val pages = listOf(
         Triple(Icons.Rounded.Swipe, "Welcome to Merge Rush", "Swipe the whole board. Equal tiles collide and grow into a bigger number."),
+        Triple(Icons.Rounded.TrendingUp, "What happens next?", "Two 2s become 4. Two 4s become 8. Keep repeating this simple rule until you reach the goal shown above the board."),
         Triple(Icons.Rounded.AutoAwesome, "Build clever combos", "Merge on consecutive moves to multiply points. Later levels ask you to master these chains."),
         Triple(Icons.Rounded.EmojiEvents, "A campaign that grows with you", "Complete tile, score, combo, and move-limit objectives. Hints and three undos help you learn without removing the challenge.")
     )
@@ -289,6 +321,14 @@ private val Readable: Color @Composable get() = MaterialTheme.colorScheme.onSurf
         Spacer(Modifier.height(28.dp))
         listOf("Best score" to player.highScore, "Games played" to player.games, "Highest tile" to player.highestTile, "Total coins" to player.coins).forEach { (label, value) ->
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp).background(Panel, RoundedCornerShape(16.dp)).padding(20.dp)) { Text(label, Modifier.weight(1f)); Text(value.toString(), color = Mint, fontWeight = FontWeight.Bold) }
+        }
+        val discovered = if (player.highestTile < 2) 0 else Integer.numberOfTrailingZeros(player.highestTile).coerceAtMost(evolutionNames.size)
+        Surface(color = Violet.copy(.14f), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(top = 18.dp)) {
+            Column(Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.AutoAwesome, null, tint = Violet); Text("EVOLUTION JOURNEY", Modifier.padding(start = 10.dp), fontWeight = FontWeight.Black) }
+                Text(if (discovered == 0) "Merge your first pair to discover Spark." else "$discovered discoveries  •  Latest: ${evolutionName(player.highestTile)}", Modifier.padding(top = 10.dp), color = Readable.copy(.78f))
+                LinearProgressIndicator(progress = { discovered / evolutionNames.size.toFloat() }, Modifier.fillMaxWidth().padding(top = 12.dp))
+            }
         }
     }
 }

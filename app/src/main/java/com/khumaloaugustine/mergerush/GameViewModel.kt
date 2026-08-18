@@ -20,20 +20,39 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _shuffles = MutableStateFlow(1)
     val shuffles = _shuffles.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            store.session.first()?.let {
+                _game.value = it.game
+                _undos.value = it.undos
+                _shuffles.value = it.shuffles
+                saved = it.game.won || it.game.gameOver
+            }
+        }
+    }
+
+    private fun persistSession() {
+        val state = _game.value
+        val undosLeft = _undos.value
+        val shufflesLeft = _shuffles.value
+        viewModelScope.launch { store.saveSession(state, undosLeft, shufflesLeft) }
+    }
+
     fun move(direction: Direction) {
         _hint.value = null
         val before = _game.value
         val result = GameEngine.move(before, direction)
         if (result.moved) previous = before
         _game.value = result.state
+        persistSession()
         if (result.state.gameOver && !saved) saveResult(1)
         if (result.state.won && !saved) {
             campaignLevels.firstOrNull { it.number == result.state.levelNumber }?.let { level -> viewModelScope.launch { store.completeLevel(level) } }
             saved = true
         }
     }
-    fun restart() { _game.value = GameEngine.newGame(); previous = null; _undos.value = 3; _shuffles.value = 1; saved = false }
-    fun startLevel(level: Level) { _game.value = GameEngine.newLevel(level); previous = null; _undos.value = 3; _shuffles.value = 1; saved = false }
+    fun restart() { _game.value = GameEngine.newGame(); previous = null; _undos.value = 3; _shuffles.value = 1; saved = false; persistSession() }
+    fun startLevel(level: Level) { _game.value = GameEngine.newLevel(level); previous = null; _undos.value = 3; _shuffles.value = 1; saved = false; persistSession() }
     fun nextLevel() {
         val next = campaignLevels.firstOrNull { it.number == _game.value.levelNumber + 1 }
         if (next != null) startLevel(next)
@@ -45,6 +64,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _game.value = GameEngine.shuffle(_game.value)
         _hint.value = null
         _shuffles.value--
+        persistSession()
     }
     fun completeOnboarding() { viewModelScope.launch { store.completeOnboarding() } }
     fun setTheme(mode: String) { viewModelScope.launch { store.setTheme(mode) } }
@@ -58,8 +78,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _game.value = snapshot.copy(milestone = null)
         previous = null
         _undos.value--
+        persistSession()
     }
-    fun continueAfterReward() { _game.value = GameEngine.continueGame(_game.value) }
+    fun continueAfterReward() { _game.value = GameEngine.continueGame(_game.value); persistSession() }
     fun doubleCoins() { if (saved) saveResult(1) }
     private fun saveResult(multiplier: Int) {
         val state = _game.value
